@@ -1,0 +1,89 @@
+{
+  "_catatan": "AKUN DUMMY untuk pengembangan. Semua nama, NIK, email (domain example.com), dan nomor HP adalah FIKTIF. Jangan pernah mengisi file ini dengan data warga asli; data warga asli disimpan di database pada Fase 2.",
+  "users": [
+    {
+      "id_user": "USR-W-001",
+      "id_kelurahan": "KEL-001",
+      "nik": "6571019900000001",
+      "nama_lengkap": "Budi Santoso (Dummy)",
+      "email": "warga1@example.com",
+      "no_hp": "081200000001",
+      "role": "WARGA",
+      "seksi": null,
+      "alamat": "Jl. Contoh No. 1, RT 01, Kampung Empat",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-W-002",
+      "id_kelurahan": "KEL-003",
+      "nik": "6571019900000002",
+      "nama_lengkap": "Siti Aminah (Dummy)",
+      "email": "warga2@example.com",
+      "no_hp": "081200000002",
+      "role": "WARGA",
+      "seksi": null,
+      "alamat": "Jl. Contoh No. 2, RT 05, Lingkas Ujung",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-W-003",
+      "id_kelurahan": "KEL-005",
+      "nik": "6571019900000003",
+      "nama_lengkap": "Andi Pratama (Dummy)",
+      "email": "warga3@example.com",
+      "no_hp": "081200000003",
+      "role": "WARGA",
+      "seksi": null,
+      "alamat": "Jl. Contoh No. 3, RT 09, Mamburungan",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-A-001",
+      "id_kelurahan": null,
+      "nik": "6571019900000101",
+      "nama_lengkap": "Petugas Pelayanan (Dummy)",
+      "email": "admin@example.com",
+      "no_hp": "081200000101",
+      "role": "ADMIN",
+      "seksi": null,
+      "alamat": "Kantor Kecamatan Tarakan Timur",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-K-001",
+      "id_kelurahan": null,
+      "nik": "6571019900000201",
+      "nama_lengkap": "Kasi Tata Pemerintahan (Dummy)",
+      "email": "kasi.tapem@example.com",
+      "no_hp": "081200000201",
+      "role": "KASI",
+      "seksi": "TATA_PEMERINTAHAN",
+      "alamat": "Kantor Kecamatan Tarakan Timur",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-K-002",
+      "id_kelurahan": null,
+      "nik": "6571019900000202",
+      "nama_lengkap": "Kasi Kesejahteraan Rakyat (Dummy)",
+      "email": "kasi.kesra@example.com",
+      "no_hp": "081200000202",
+      "role": "KASI",
+      "seksi": "KESRA",
+      "alamat": "Kantor Kecamatan Tarakan Timur",
+      "aktif": true
+    },
+    {
+      "id_user": "USR-C-001",
+      "id_kelurahan": null,
+      "nik": "6571019900000301",
+      "nama_lengkap": "Camat (Dummy)",
+      "email": "camat@example.com",
+      "no_hp": "081200000301",
+      "role": "CAMAT",
+      "seksi": null,
+      "alamat": "Kantor Kecamatan Tarakan Timur",
+      "aktif": true
+    }
+  ]
+}

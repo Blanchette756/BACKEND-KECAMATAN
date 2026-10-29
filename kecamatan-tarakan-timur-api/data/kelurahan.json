@@ -1,0 +1,12 @@
+{
+  "_catatan": "Daftar kelurahan di Kecamatan Tarakan Timur. Perlu diverifikasi dengan data resmi kecamatan.",
+  "kelurahan": [
+    { "id_kelurahan": "KEL-001", "nama": "Kampung Empat" },
+    { "id_kelurahan": "KEL-002", "nama": "Kampung Enam" },
+    { "id_kelurahan": "KEL-003", "nama": "Lingkas Ujung" },
+    { "id_kelurahan": "KEL-004", "nama": "Gunung Lingkas" },
+    { "id_kelurahan": "KEL-005", "nama": "Mamburungan" },
+    { "id_kelurahan": "KEL-006", "nama": "Mamburungan Timur" },
+    { "id_kelurahan": "KEL-007", "nama": "Pantai Amal" }
+  ]
+}
