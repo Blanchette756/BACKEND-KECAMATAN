@@ -1,11 +1,3 @@
-# API Pelayanan Publik Kecamatan Tarakan Timur
-
-Backend REST API untuk 9 layanan resmi (SP CCTI) Kecamatan Tarakan Timur.
-**Fase 1: dummy-first.** Data disimpan di memori dan login masih tiruan (mock), tetapi alur kerja,
-validasi, dan keamanannya sudah seperti versi produksi.
-
-**Teknologi:** Node.js 20+ (disarankan 24) · TypeScript strict · Fastify 5 · TypeBox · Vitest
-
 ---
 
 ## 1. Menjalankan di komputer (Windows / PowerShell)
