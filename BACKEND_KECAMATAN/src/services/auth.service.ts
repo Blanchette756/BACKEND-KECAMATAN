@@ -24,6 +24,12 @@ export class AuthService {
     if (!user || !user.aktif) throw unauthorized('Email tidak terdaftar sebagai akun dummy');
 
     await repos.sesi.deleteExpired(now().getTime());
+    // Batasi sesi aktif per akun: sesi paling lama dicabut (temuan audit run-1 #3).
+    // Karena jumlah akun terbatas, total sesi di memori juga ikut terbatas.
+    const aktif = (await repos.sesi.listByUser(user.id_user)).sort((a, b) => a.kedaluwarsa_ms - b.kedaluwarsa_ms);
+    for (const lama of aktif.slice(0, Math.max(0, aktif.length - (config.maxSesiPerUser - 1)))) {
+      await repos.sesi.delete(lama.token_hash);
+    }
     const token = newToken();
     const kedaluwarsaMs = now().getTime() + config.sessionTtlMinutes * 60_000;
     await repos.sesi.create({ token_hash: sha256(token), id_user: user.id_user, kedaluwarsa_ms: kedaluwarsaMs });

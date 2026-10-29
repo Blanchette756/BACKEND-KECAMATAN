@@ -35,7 +35,7 @@ export interface ContainerOptions {
 export function createContainer(config: AppConfig, opts: ContainerOptions = {}): Container {
   const master = opts.master ?? loadMasterData(config.dataDir);
   const store = new MemoryStore(master);
-  const repos = createMemoryRepositories(store);
+  const repos = createMemoryRepositories(store, config);
   const deps: ServiceDeps = { repos, config, now: opts.now ?? (() => new Date()) };
 
   const workflow = new WorkflowService(deps);

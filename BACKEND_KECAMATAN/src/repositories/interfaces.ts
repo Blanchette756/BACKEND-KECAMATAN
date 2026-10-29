@@ -63,6 +63,7 @@ export interface RiwayatRepository {
 }
 
 export interface AuditRepository {
+  /** Implementasi wajib membatasi retensi (Fase 1: ring buffer; Fase 2: tabel + kebijakan retensi). */
   add(a: AuditLog): Promise<void>;
   listByTarget(targetId: string): Promise<AuditLog[]>;
 }
@@ -70,6 +71,7 @@ export interface AuditRepository {
 export interface SesiRepository {
   create(s: Sesi): Promise<void>;
   findByHash(tokenHash: string): Promise<Sesi | null>;
+  listByUser(idUser: string): Promise<Sesi[]>;
   delete(tokenHash: string): Promise<void>;
   deleteExpired(nowMs: number): Promise<number>;
 }

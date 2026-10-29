@@ -12,6 +12,7 @@ import {
   SerahkanBodySchema,
   VerifikasiBodySchema,
 } from '../schemas/pengajuan.schema.js';
+import { BODY_LIMIT_KECIL } from '../constants/pola.js';
 
 interface Opts {
   controller: PengajuanController;
@@ -26,6 +27,7 @@ export const pengajuanRoutes: FastifyPluginAsyncTypebox<Opts> = async (app, { co
   app.post(
     '/pengajuan/lacak',
     {
+      bodyLimit: BODY_LIMIT_KECIL,
       config: { rateLimit: { max: config.rateLimit.lacak, timeWindow: '1 minute' } },
       schema: {
         tags: ['Pengajuan – Publik'],
@@ -94,7 +96,7 @@ export const pengajuanRoutes: FastifyPluginAsyncTypebox<Opts> = async (app, { co
       onRequest: guards.wajibRole('ADMIN', 'KASI', 'CAMAT'),
       schema: { tags: ['Pengajuan – Petugas'], summary: 'Ringkasan statistik & durasi tiap tahap layanan', security: bearer },
     },
-    async () => controller.statistik(),
+    async (req) => controller.statistik(userDari(req)),
   );
 
   app.patch(

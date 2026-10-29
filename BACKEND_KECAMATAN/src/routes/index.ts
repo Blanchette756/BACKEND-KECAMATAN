@@ -15,7 +15,8 @@ export const apiRoutes: FastifyPluginAsyncTypebox<{ container: Container }> = as
 
   app.get('/health', { schema: { tags: ['Sistem'], summary: 'Cek server hidup' } }, async () => ({
     status: 'ok',
-    auth_mode: config.authMode,
+    // Detail mode auth hanya ditampilkan di luar production.
+    ...(config.nodeEnv === 'production' ? {} : { auth_mode: config.authMode }),
     waktu: new Date().toISOString(),
   }));
 

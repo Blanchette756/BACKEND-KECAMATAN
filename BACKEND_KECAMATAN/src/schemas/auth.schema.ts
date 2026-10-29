@@ -1,7 +1,8 @@
 import Type, { type Static } from 'typebox';
+import { POLA_EMAIL } from '../constants/pola.js';
 
 export const MockLoginBodySchema = Type.Object(
-  { email: Type.String({ minLength: 3, maxLength: 120, pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$' }) },
+  { email: Type.String({ minLength: 3, maxLength: 120, pattern: POLA_EMAIL }) },
   { additionalProperties: false },
 );
 export type MockLoginBody = Static<typeof MockLoginBodySchema>;

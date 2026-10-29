@@ -27,7 +27,7 @@ tercetak di log (`contoh_lacak`), bisa dipakai untuk mencoba fitur lacak.
 | Perintah | Fungsi |
 |---|---|
 | `npm run dev` | Mode pengembangan, auto-reload saat file diubah |
-| `npm test` | Menjalankan semua tes otomatis (49 tes) |
+| `npm test` | Menjalankan semua tes otomatis (65 tes) |
 | `npm run typecheck` | Cek tipe TypeScript |
 | `npm run validate-data` | Cek isi folder `data/` (jalankan setiap kali data diubah) |
 | `npm run check` | Ketiganya sekaligus, jalankan sebelum commit |
@@ -178,6 +178,7 @@ Untuk beberapa nilai, pakai `"salah_satu": ["A", "B"]`.
   untuk server demo.
 - **Autentikasi dicek paling awal** (hook `onRequest`), sebelum body dibaca.
 - **Token sesi** acak 256-bit dengan masa berlaku. Yang disimpan hanya hash SHA-256-nya.
+  Maksimal 5 sesi aktif per akun (`MAX_SESI_PER_USER`); login ke-6 mencabut sesi tertua.
 - **Otorisasi per objek (anti-IDOR).** Warga hanya bisa membuka pengajuannya sendiri, dan Kasi
   hanya seksinya. Data milik orang lain dijawab 404, bukan 403, supaya keberadaannya tidak bocor.
   ID pengajuan berupa UUID acak.
@@ -185,45 +186,40 @@ Untuk beberapa nilai, pakai `"salah_satu": ["A", "B"]`.
   - Kode registrasi acak (bukan berurutan).
   - Wajib 4 digit HP, dibandingkan dengan perbandingan *constant-time*.
   - Pesan error identik untuk "tidak ada" dan "HP salah".
-  - Rate limit 10/menit per IP.
+  - Rate limit 10/menit per IP, **dan** kunci per nomor registrasi: setelah 5 kali HP salah,
+    nomor itu dikunci 15 menit walau penyerang memakai banyak IP (`LACAK_MAX_GAGAL`, `LACAK_KUNCI_MENIT`).
+  - Body dibatasi 1 KiB.
   - Respons dibatasi skema, sehingga data pribadi tidak mungkin ikut terkirim.
 - **Validasi ketat.** Field tak dikenal ditolak (cegah *mass assignment*). Tipe, panjang, opsi,
   dan tanggal diperiksa. Berkas hanya PDF/JPG/PNG, dengan ekstensi yang harus cocok, batas ukuran,
-  dan penolakan nama file berbahaya seperti `../`.
+  dan penolakan nama file berbahaya seperti `../`, nama berawalan titik, serta karakter tersembunyi
+  (pengarah bidi dan zero-width) di nama file maupun isian teks.
+- **Regex aman.** Semua pola untuk input dari luar berjalan linear (lihat `src/constants/pola.ts`).
 - **State machine terpusat**, dengan *optimistic locking* (`version`) dan riwayat setiap perubahan status.
-- **Jejak audit.** Setiap petugas yang membuka data pemohon tercatat.
-- **Data pribadi disamarkan** di daftar dan profil (`6571********0001`). Catatan internal antar-petugas
-  tidak pernah ditampilkan ke warga.
+- **Jejak audit.** Setiap respons yang memberi petugas data pribadi pemohon tercatat (detail maupun
+  hasil aksi). Fase 1 menyimpan maksimal 10.000 entri terbaru (`AUDIT_LOG_MAX`).
+- **Data pribadi disamarkan** di daftar dan profil (`6571********0001`).
+- **Catatan antar-petugas tidak pernah ditampilkan ke warga.** Warga hanya melihat catatan revisi dan
+  alasan penolakan (allowlist di `src/services/presenter.ts`). Catatan pada SETUJUI/paraf/TTE/KEMBALIKAN
+  hanya untuk petugas.
+- **Kasi hanya melihat seksinya sendiri**, termasuk di antrian dan statistik.
 - **Header HTTP:**
   - Helmet: CSP, nosniff, frameguard, dan HSTS (khusus production).
   - CORS hanya untuk origin terdaftar (`*` ditolak).
   - `Cache-Control: no-store` untuk data pribadi.
 - **Rate limit** global (120/menit/IP), login (10/menit), dan lacak (10/menit). Anti-spam:
-  maksimal 10 pengajuan aktif per warga.
+  maksimal 10 pengajuan aktif per warga. IP pengunjung hanya dibaca dari proxy yang terdaftar di
+  `TRUST_PROXY` (nilai `true` ditolak, karena membuat IP bisa dipalsukan).
 - **Error rapi.** Error tak terduga dijawab 500 dengan pesan umum; detailnya hanya di log server.
   Token disensor dari log.
-- **Dokumentasi `/docs`** otomatis mati di production.
+- **Dokumentasi `/docs`** dan **data contoh** otomatis mati di production. `/health` tidak menyebut
+  mode auth di production.
 - **Dependensi:** `npm audit` = 0 kerentanan saat repositori dibuat.
+- **Diaudit** dengan `cloudflare/security-audit-skill` (run-1). Temuan dan perbaikannya ada di `CHANGELOG.md`.
 
 ---
 
-## 7. Batasan Fase 1 (sengaja, akan diganti di Fase 2)
-
-| Fase 1 (sekarang) | Fase 2 |
-|---|---|
-| Data di memori, **hilang setiap restart/deploy** | MySQL (Hostinger Managed MySQL) |
-| Login mock tanpa password | Login sungguhan (password/OTP) |
-| Berkas hanya metadata, `file_url` dummy | Unggah sungguhan + cek magic bytes + penyimpanan privat |
-| TTE **simulasi** (`SIMULASI-TTE-...`) | Integrasi TTE BSrE/BSSN (melalui Diskominfo) |
-| Nomor surat `DUMMY/...` | Format resmi kecamatan |
-
-**Cara pindah ke MySQL:** buat implementasi baru dari interface di `src/repositories/interfaces.ts`
-(misalnya `src/repositories/mysql/`), lalu ganti satu baris di `src/repositories/index.ts`.
-Service, controller, route, dan tes tidak perlu diubah.
-
----
-
-## 8. Deploy ke Hostinger (Node.js Web App)
+## 7. Deploy ke Hostinger (Node.js Web App)
 
 - Versi Node: **24.x**
 - Build command: `npm run build`
@@ -233,9 +229,18 @@ Service, controller, route, dan tes tidak perlu diubah.
   ```
   NODE_ENV=production
   CORS_ORIGINS=https://domain-frontend-kalian
-  TRUST_PROXY=true
+  TRUST_PROXY=loopback
   ALLOW_MOCK_AUTH_IN_PRODUCTION=true   # HANYA selama masih server demo berisi data dummy
   ```
+- **Memastikan `TRUST_PROXY` benar** (sekali saja, setelah deploy):
+  1. Deploy dengan `TRUST_PROXY=loopback`.
+  2. Buka `https://api.domain-kalian/api/v1/health` dari HP (jaringan seluler).
+  3. Lihat log aplikasi di hPanel. Nilai `remoteAddress` pada baris `incoming request` harus berisi
+     **IP HP kamu**, bukan 127.0.0.1.
+  4. Kalau isinya IP lain (misalnya IP internal Hostinger seperti `10.x.x.x`), tambahkan rentangnya:
+     `TRUST_PROXY=loopback,uniquelocal`. Kalau memakai Cloudflare, tambahkan juga rentang IP Cloudflare
+     dari https://www.cloudflare.com/ips/ (dipisah koma).
+  5. Jangan pernah mengisi `true`: server akan menolak start.
 - Hostinger menjalankan `domain.tld` dan `www.domain.tld` sebagai **dua proses terpisah**. Dengan store
   in-memory, keduanya akan punya data berbeda. Taruh API di **subdomain sendiri** (misalnya
   `api.domain`) dan jangan diakses lewat dua host.
@@ -243,7 +248,7 @@ Service, controller, route, dan tes tidak perlu diubah.
 
 ---
 
-## 9. Struktur folder
+## 8. Struktur folder
 
 ```
 data/                  Data master JSON (bisa diganti tanpa ubah kode)
@@ -263,12 +268,12 @@ src/
 ├── plugins/           Keamanan, autentikasi, penanganan error
 ├── scripts/           validate-data
 └── utils/             Error, ID acak, masking
-test/                  49 tes otomatis (alur, otorisasi/IDOR, lacak, data, konfigurasi)
+test/                  65 tes otomatis (alur, otorisasi/IDOR, lacak, data, konfigurasi, regresi audit)
 ```
 
 ---
 
-## 10. Perlu dikonfirmasi ke kecamatan
+## 9. Perlu dikonfirmasi ke kecamatan
 
 1. **Jumlah rangkap** berkas tiap layanan (belum ada di SP; saat ini `null`).
 2. **"dan/atau"** pada SP Ahli Waris: apakah KK Pewaris dan KK Ahli Waris wajib? (saat ini opsional)

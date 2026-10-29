@@ -1,5 +1,6 @@
 import Type, { type Static } from 'typebox';
 import { RoleSchema, SeksiSchema } from './common.js';
+import { POLA_EMAIL } from '../constants/pola.js';
 
 export const KelurahanSchema = Type.Object(
   {
@@ -16,7 +17,7 @@ export const UserSchema = Type.Object(
     id_kelurahan: Type.Union([Type.String(), Type.Null()]),
     nik: Type.String({ pattern: '^[0-9]{16}$' }),
     nama_lengkap: Type.String({ minLength: 2, maxLength: 120 }),
-    email: Type.String({ pattern: '^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$', maxLength: 120 }),
+    email: Type.String({ pattern: POLA_EMAIL, maxLength: 120 }),
     no_hp: Type.String({ pattern: '^08[0-9]{8,12}$' }),
     role: RoleSchema,
     /** Wajib diisi untuk KASI (bidang yang ia pegang). null untuk role lain. */

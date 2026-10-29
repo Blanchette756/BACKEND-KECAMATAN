@@ -13,10 +13,18 @@ async function main(): Promise<void> {
   if (config.authMode === 'mock' && config.nodeEnv === 'production') {
     app.log.warn('⚠ AUTH MOCK AKTIF DI PRODUCTION (ALLOW_MOCK_AUTH_IN_PRODUCTION=true). Hanya untuk server DEMO berisi data dummy!');
   }
+  if (!config.nodeEnvEksplisit) {
+    app.log.warn('⚠ NODE_ENV tidak diisi, dianggap "development". Di server, selalu isi NODE_ENV=production.');
+  }
 
   if (config.seedDemoPengajuan) {
     const contoh = await seedDemoPengajuan(container);
-    app.log.info({ contoh_lacak: contoh }, `Data demo: ${contoh.length} contoh pengajuan dibuat`);
+    if (config.nodeEnv === 'production') {
+      // Jangan tulis pasangan nomor registrasi + 4 digit HP ke log server production.
+      app.log.info(`Data demo: ${contoh.length} contoh pengajuan dibuat`);
+    } else {
+      app.log.info({ contoh_lacak: contoh }, `Data demo: ${contoh.length} contoh pengajuan dibuat`);
+    }
   }
 
   // Hentikan server dengan rapi saat Hostinger me-restart/deploy.

@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { isIP } from 'node:net';
 import path from 'node:path';
 
 export type NodeEnv = 'development' | 'test' | 'production';
@@ -6,21 +7,65 @@ export type AuthMode = 'mock';
 
 export interface AppConfig {
   nodeEnv: NodeEnv;
+  /** false bila NODE_ENV tidak diisi sama sekali (jatuh ke default "development"). */
+  nodeEnvEksplisit: boolean;
   port: number;
   host: string;
   timezone: string;
   corsOrigins: string[];
-  trustProxy: boolean;
+  /**
+   * false = jangan percaya X-Forwarded-For (koneksi langsung, tanpa proxy).
+   * string = daftar IP/CIDR proxy tepercaya, dipisah koma (mis. "loopback" atau "127.0.0.1,10.0.0.0/8").
+   * Nilai `true` (percaya semua hop) sengaja TIDAK didukung karena membuat IP bisa dipalsukan.
+   */
+  trustProxy: false | string;
   authMode: AuthMode;
   allowMockAuthInProduction: boolean;
   sessionTtlMinutes: number;
+  maxSesiPerUser: number;
+  auditLogMax: number;
   enableDocs: boolean;
   maxFileBytes: number;
   maxFilesPerPengajuan: number;
   rateLimit: { global: number; lacak: number; login: number };
+  /** Kunci lacak per nomor registrasi setelah sejumlah percobaan gagal. */
+  lacakLockout: { maxGagal: number; menit: number };
   seedDemoPengajuan: boolean;
   dataDir: string;
   logLevel: string;
+}
+
+const NAMA_RENTANG_PROXY = new Set(['loopback', 'linklocal', 'uniquelocal']);
+
+/** Validasi satu entri TRUST_PROXY: nama rentang, IP, atau IP/prefix. */
+function entriProxyValid(entri: string): boolean {
+  if (NAMA_RENTANG_PROXY.has(entri)) return true;
+  const [ip, prefix, ...sisa] = entri.split('/');
+  if (sisa.length > 0 || ip === undefined) return false;
+  const versi = isIP(ip);
+  if (versi === 0) return false;
+  if (prefix === undefined) return true;
+  if (!/^[0-9]{1,3}$/.test(prefix)) return false;
+  const n = Number(prefix);
+  return n >= 0 && n <= (versi === 4 ? 32 : 128);
+}
+
+function parseTrustProxy(raw: string | undefined): false | string {
+  const v = (raw ?? '').trim();
+  if (v === '' || v.toLowerCase() === 'false' || v === '0') return false;
+  if (v.toLowerCase() === 'true' || v === '1' || /^[0-9]+$/.test(v)) {
+    throw new ConfigError(
+      'TRUST_PROXY tidak boleh "true" atau angka (membuat IP pengunjung bisa dipalsukan lewat X-Forwarded-For). ' +
+        'Isi "false", atau daftar IP/CIDR proxy tepercaya, mis. TRUST_PROXY=loopback',
+    );
+  }
+  const entri = v.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  for (const e of entri) {
+    if (!entriProxyValid(e)) {
+      throw new ConfigError(`TRUST_PROXY berisi entri tidak valid: "${e}" (gunakan IP, IP/prefix, atau loopback/linklocal/uniquelocal)`);
+    }
+  }
+  return entri.join(',');
 }
 
 export class ConfigError extends Error {
@@ -109,14 +154,17 @@ export function loadConfig(env: Env = process.env): AppConfig {
 
   return {
     nodeEnv,
+    nodeEnvEksplisit: (env.NODE_ENV ?? '').trim() !== '',
     port: int(env, 'PORT', 3000, 1, 65535),
     host: str(env, 'HOST', '0.0.0.0'),
     timezone,
     corsOrigins,
-    trustProxy: bool(env, 'TRUST_PROXY', false),
+    trustProxy: parseTrustProxy(env.TRUST_PROXY),
     authMode,
     allowMockAuthInProduction,
     sessionTtlMinutes: int(env, 'SESSION_TTL_MINUTES', 480, 5, 7 * 24 * 60),
+    maxSesiPerUser: int(env, 'MAX_SESI_PER_USER', 5, 1, 50),
+    auditLogMax: int(env, 'AUDIT_LOG_MAX', 10_000, 100, 1_000_000),
     enableDocs: bool(env, 'ENABLE_DOCS', !isProd),
     maxFileBytes: int(env, 'MAX_FILE_MB', 2, 1, 20) * 1024 * 1024,
     maxFilesPerPengajuan: int(env, 'MAX_FILES_PER_PENGAJUAN', 15, 1, 50),
@@ -125,7 +173,12 @@ export function loadConfig(env: Env = process.env): AppConfig {
       lacak: int(env, 'RATE_LIMIT_LACAK', 10, 1, 10_000),
       login: int(env, 'RATE_LIMIT_LOGIN', 10, 1, 10_000),
     },
-    seedDemoPengajuan: bool(env, 'SEED_DEMO_PENGAJUAN', nodeEnv !== 'test'),
+    lacakLockout: {
+      maxGagal: int(env, 'LACAK_MAX_GAGAL', 5, 1, 1000),
+      menit: int(env, 'LACAK_KUNCI_MENIT', 15, 1, 24 * 60),
+    },
+    // Data contoh hanya otomatis di development; di production harus diminta eksplisit.
+    seedDemoPengajuan: bool(env, 'SEED_DEMO_PENGAJUAN', nodeEnv === 'development'),
     dataDir: path.resolve(str(env, 'DATA_DIR', 'data')),
     logLevel: str(env, 'LOG_LEVEL', nodeEnv === 'test' ? 'silent' : 'info'),
   };

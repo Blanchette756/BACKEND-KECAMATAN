@@ -16,6 +16,8 @@ const EKSTENSI_PER_MIME: Record<MimeDiizinkan, readonly string[]> = {
   'image/png': ['.png'],
 };
 // Karakter kontrol (kecuali tab & baris baru untuk paragraf) tidak diizinkan.
+// Karakter tak terlihat yang bisa menyamarkan teks: pengarah bidi (mis. "rapor\u202Efdp.exe") & zero-width.
+const KARAKTER_TERSEMBUNYI = /[\u200B-\u200F\u202A-\u202E\u2060-\u2064\u2066-\u2069\uFEFF]/;
 // eslint-disable-next-line no-control-regex
 const KARAKTER_KONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 // eslint-disable-next-line no-control-regex
@@ -83,7 +85,8 @@ export function validasiFormulir(layanan: JenisLayanan, input: Record<string, un
         const v = raw.trim();
         const maks = f.panjang_maks ?? PANJANG_MAKS_DEFAULT[f.tipe];
         if (v.length > maks) masalah.push(`${lok}: maksimal ${maks} karakter`);
-        else if (KARAKTER_KONTROL.test(v) || (f.tipe === 'teks' && /[\r\n]/.test(v))) masalah.push(`${lok}: berisi karakter yang tidak diizinkan`);
+        else if (KARAKTER_KONTROL.test(v) || KARAKTER_TERSEMBUNYI.test(v) || (f.tipe === 'teks' && /[\r\n]/.test(v)))
+          masalah.push(`${lok}: berisi karakter yang tidak diizinkan`);
         else bersih[f.key] = v;
         break;
       }
@@ -121,10 +124,12 @@ export interface AturanBerkas {
 /** Validasi satu metadata berkas (tipe, ukuran, nama file). */
 export function validasiSatuBerkas(b: BerkasInput, lok: string, aturan: AturanBerkas): string[] {
   const masalah: string[] = [];
+  // Validasi nama yang SAMA dengan yang akan disimpan (setelah trim), bukan nama mentah.
+  const nama = b.nama_file.trim();
   if (!(MIME_DIIZINKAN as readonly string[]).includes(b.mime_type)) {
     masalah.push(`${lok}: tipe file harus PDF, JPG, atau PNG`);
   } else {
-    const ext = path.extname(b.nama_file).toLowerCase();
+    const ext = path.extname(nama).toLowerCase();
     if (!EKSTENSI_PER_MIME[b.mime_type as MimeDiizinkan].includes(ext)) {
       masalah.push(`${lok}: ekstensi "${ext || '(tanpa ekstensi)'}" tidak cocok dengan tipe ${b.mime_type}`);
     }
@@ -133,7 +138,13 @@ export function validasiSatuBerkas(b: BerkasInput, lok: string, aturan: AturanBe
   else if (b.ukuran_byte > aturan.maxFileBytes) {
     masalah.push(`${lok}: ukuran file maksimal ${Math.round(aturan.maxFileBytes / 1024 / 1024)} MB`);
   }
-  if (NAMA_FILE_TERLARANG.test(b.nama_file) || b.nama_file.startsWith('.') || b.nama_file.length > 150) {
+  if (
+    nama.length === 0 ||
+    nama.length > 150 ||
+    nama.startsWith('.') ||
+    NAMA_FILE_TERLARANG.test(nama) ||
+    KARAKTER_TERSEMBUNYI.test(nama)
+  ) {
     masalah.push(`${lok}: nama file tidak valid`);
   }
   return masalah;

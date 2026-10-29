@@ -4,6 +4,7 @@ import type { AuthController } from '../controllers/auth.controller.js';
 import type { AuthGuards } from '../plugins/auth.js';
 import { LoginResponseSchema, MeResponseSchema, MockLoginBodySchema } from '../schemas/auth.schema.js';
 import { errorResponses } from '../schemas/common.schema.js';
+import { BODY_LIMIT_KECIL } from '../constants/pola.js';
 
 interface Opts {
   controller: AuthController;
@@ -15,6 +16,7 @@ export const authRoutes: FastifyPluginAsyncTypebox<Opts> = async (app, { control
   app.post(
     '/auth/mock-login',
     {
+      bodyLimit: BODY_LIMIT_KECIL,
       config: { rateLimit: { max: config.rateLimit.login, timeWindow: '1 minute' } },
       schema: {
         tags: ['Auth'],

@@ -1,6 +1,7 @@
 import { STATUS, type StatusPengajuan } from '../constants/workflow.js';
 import type { RiwayatStatus } from '../types/pengajuan.js';
 import type { ServiceDeps } from './deps.js';
+import type { User } from '../types/user.js';
 
 interface Durasi {
   sampel: number;
@@ -27,13 +28,19 @@ const menitAntara = (a: string, b: string) => (new Date(b).getTime() - new Date(
 export class StatistikService {
   constructor(private readonly deps: ServiceDeps) {}
 
-  async ringkasan() {
+  async ringkasan(user: User) {
     const { repos } = this.deps;
-    const [semua, riwayat, layanan] = await Promise.all([
+    const [semuaRaw, riwayatRaw, layananRaw] = await Promise.all([
       repos.pengajuan.listAll(),
       repos.riwayat.listAll(),
       repos.master.listLayanan(),
     ]);
+    // Kasi hanya melihat statistik seksinya sendiri; Admin & Camat melihat seluruh kecamatan.
+    const lingkup = user.role === 'KASI' ? user.seksi : null;
+    const semua = lingkup === null ? semuaRaw : semuaRaw.filter((p) => p.seksi === lingkup);
+    const idDalamLingkup = new Set(semua.map((p) => p.id_pengajuan));
+    const riwayat = riwayatRaw.filter((r) => idDalamLingkup.has(r.id_pengajuan));
+    const layanan = lingkup === null ? layananRaw : layananRaw.filter((l) => l.seksi === lingkup);
 
     const perStatus = Object.fromEntries(STATUS.map((s) => [s, 0])) as Record<StatusPengajuan, number>;
     for (const p of semua) perStatus[p.status_pengajuan]++;
@@ -73,6 +80,7 @@ export class StatistikService {
     }
 
     return {
+      lingkup: lingkup ?? 'SEMUA',
       total_pengajuan: semua.length,
       per_status: perStatus,
       per_layanan: perLayanan,

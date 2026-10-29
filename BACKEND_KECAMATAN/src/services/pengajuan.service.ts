@@ -8,6 +8,7 @@ import type { PengajuanPelayanan } from '../types/pengajuan.js';
 import type { User } from '../types/user.js';
 import { AppError, badRequest, conflict, forbidden, notFound, validationFailed } from '../utils/errors.js';
 import { newId } from '../utils/ids.js';
+import { AttemptLimiter } from '../utils/attempt-limiter.js';
 import type { ServiceDeps } from './deps.js';
 import { rapikanNamaFile, syaratBerlaku, validasiBerkas, validasiFormulir, validasiSatuBerkas } from './form-validator.js';
 import { detailPengajuan, ringkasPengajuan } from './presenter.js';
@@ -42,10 +43,16 @@ export interface InputKeputusan {
 const PESAN_LACAK_GAGAL = 'Nomor registrasi atau 4 digit nomor HP tidak cocok';
 
 export class PengajuanService {
+  /** Kunci lacak per nomor registrasi setelah beberapa percobaan HP salah. */
+  private readonly lacakLimiter: AttemptLimiter;
+
   constructor(
     private readonly deps: ServiceDeps,
     private readonly workflow: WorkflowService,
-  ) {}
+  ) {
+    const { maxGagal, menit } = deps.config.lacakLockout;
+    this.lacakLimiter = new AttemptLimiter(maxGagal, menit * 60_000);
+  }
 
   // ------------------------------------------------------------------ helpers
 
@@ -67,7 +74,7 @@ export class PengajuanService {
       case 'WARGA':
         return p.id_user === user.id_user;
       case 'KASI':
-        return p.seksi === user.seksi;
+        return user.seksi !== null && p.seksi === user.seksi;
       case 'ADMIN':
       case 'CAMAT':
         return true;
@@ -105,6 +112,18 @@ export class PengajuanService {
       repos.berkas.listByPengajuan(p.id_pengajuan),
       repos.riwayat.listByPengajuan(p.id_pengajuan),
     ]);
+    if (user.role !== 'WARGA') {
+      // Jejak audit setiap kali petugas menerima data pribadi pemohon
+      // (detail maupun respons aksi verifikasi/paraf/TTE/serahkan).
+      await repos.audit.add({
+        id_log: newId('LOG'),
+        waktu: this.deps.now().toISOString(),
+        id_user: user.id_user,
+        role: user.role,
+        aksi: 'LIHAT_PENGAJUAN',
+        target_id: p.id_pengajuan,
+      });
+    }
     return detailPengajuan(p, layanan, pemohon, berkas, riwayat, user.role === 'WARGA' ? 'PEMOHON' : 'PETUGAS');
   }
 
@@ -232,31 +251,34 @@ export class PengajuanService {
 
   async detail(user: User, id: string) {
     const p = await this.ambilDenganAkses(user, id);
-    if (user.role !== 'WARGA') {
-      // Jejak audit: petugas yang membuka data pribadi pemohon.
-      await this.deps.repos.audit.add({
-        id_log: newId('LOG'),
-        waktu: this.deps.now().toISOString(),
-        id_user: user.id_user,
-        role: user.role,
-        aksi: 'LIHAT_PENGAJUAN',
-        target_id: p.id_pengajuan,
-      });
-    }
-    return this.detailUntuk(user, p);
+    return this.detailUntuk(user, p); // detailUntuk mencatat audit untuk petugas
   }
 
   /** Lacak publik tanpa login. Tidak mengembalikan data pribadi apa pun. */
   async lacak(noRegistrasi: string, last4: string) {
-    const { repos } = this.deps;
-    const p = await repos.pengajuan.findByNoRegistrasi(noRegistrasi.trim().toUpperCase());
+    const { repos, now } = this.deps;
+    const nomor = noRegistrasi.trim().toUpperCase();
+    const nowMs = now().getTime();
+    // Dicek SEBELUM mencari data, jadi perilakunya sama untuk nomor yang ada maupun tidak (tanpa oracle).
+    if (this.lacakLimiter.terkunci(nomor, nowMs)) {
+      throw new AppError(
+        429,
+        'TERLALU_BANYAK_PERCOBAAN',
+        `Terlalu banyak percobaan untuk nomor ini. Coba lagi dalam ${this.deps.config.lacakLockout.menit} menit, atau login untuk melihat status.`,
+      );
+    }
+    const p = await repos.pengajuan.findByNoRegistrasi(nomor);
     const pemohon = p ? await repos.users.findById(p.id_user) : null;
     const cocok =
       p !== null &&
       pemohon !== null &&
       timingSafeEqual(Buffer.from(pemohon.no_hp.slice(-4).padStart(4, '#')), Buffer.from(last4.padStart(4, '#').slice(-4)));
     // Pesan & status sama untuk "tidak ada" dan "HP salah", agar tidak bisa dipakai menebak.
-    if (!p || !cocok) throw new AppError(404, 'NOT_FOUND', PESAN_LACAK_GAGAL);
+    if (!p || !cocok) {
+      this.lacakLimiter.catatGagal(nomor, nowMs);
+      throw new AppError(404, 'NOT_FOUND', PESAN_LACAK_GAGAL);
+    }
+    this.lacakLimiter.reset(nomor);
 
     const layanan = await this.layananAtauGagal(p.id_layanan);
     const riwayat = (await repos.riwayat.listByPengajuan(p.id_pengajuan)).sort((a, b) => a.waktu.localeCompare(b.waktu));
@@ -283,8 +305,10 @@ export class PengajuanService {
   async antrian(user: User, paging: Paging) {
     const { repos } = this.deps;
     if (user.role === 'WARGA') throw forbidden();
+    // Kasi tanpa seksi ditolak (fail closed), jangan sampai filter kosong = melihat semua.
+    if (user.role === 'KASI' && user.seksi === null) throw forbidden('Akun Kasi belum memiliki seksi');
     const statuses = ANTRIAN_PER_ROLE[user.role];
-    const filter = user.role === 'KASI' && user.seksi ? { seksi: user.seksi } : {};
+    const filter = user.role === 'KASI' && user.seksi !== null ? { seksi: user.seksi } : {};
     const hal = await repos.pengajuan.listByStatus(statuses, filter, paging);
     const layanan = new Map((await repos.master.listLayanan()).map((l) => [l.id_layanan, l]));
     const items = await Promise.all(

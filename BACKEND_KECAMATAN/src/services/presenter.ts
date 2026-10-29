@@ -38,7 +38,20 @@ export function ringkasPengajuan(p: PengajuanPelayanan, layanan: JenisLayanan | 
   };
 }
 
-const AKSI_INTERNAL = new Set(['KASI_KEMBALIKAN', 'CAMAT_KEMBALIKAN']);
+/**
+ * ALLOWLIST aksi yang catatannya memang ditujukan ke pemohon.
+ * Aksi lain (SETUJUI/PARAF/TTE/KEMBALIKAN) dianggap catatan antar-petugas dan disembunyikan.
+ * Sengaja allowlist, bukan denylist: aksi baru otomatis tersembunyi sampai diputuskan lain
+ * (temuan audit run-1 #4).
+ */
+const AKSI_CATATAN_UNTUK_PEMOHON: ReadonlySet<string> = new Set([
+  'AJUKAN',
+  'KIRIM_REVISI',
+  'ADMIN_MINTA_REVISI',
+  'ADMIN_TOLAK',
+  'KASI_TOLAK',
+  'CAMAT_TOLAK',
+]);
 
 export function detailPengajuan(
   p: PengajuanPelayanan,
@@ -112,7 +125,7 @@ export function detailPengajuan(
         aksi: r.aksi,
         oleh_role: r.oleh_role,
         // Catatan antar-petugas tidak ditampilkan ke pemohon.
-        catatan: untukPetugas || !AKSI_INTERNAL.has(r.aksi) ? r.catatan : null,
+        catatan: untukPetugas || AKSI_CATATAN_UNTUK_PEMOHON.has(r.aksi) ? r.catatan : null,
         waktu: r.waktu,
       })),
   };
